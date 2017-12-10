@@ -1,0 +1,32 @@
+name:                redcode
+version:             0.1.0.0
+github:              dariota/redcode
+license:             GPLv3
+author:              Dário Tavares Antunes
+maintainer:          tavaresd@tcd.ie
+copyright:           2017 Dário Tavares Antunes
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+synopsis:            A MARS redcode simulator for a college assignment
+
+description:         Please see the README on Github at <https://github.com/dariota/redcode#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+
+executables:
+  redcode-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - redcode
