@@ -4,7 +4,7 @@ module Core (
 ) where
 
 import Prelude hiding (lookup)
-import Instruction
+import Instruction.Instruction
 import qualified Data.Map.Strict as Map
 \end{code}
 

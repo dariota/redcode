@@ -3,7 +3,7 @@ module Parser
     ( readProgram
     ) where
 
-import Instruction
+import Instruction.Instruction
 import Data.Char (isSpace)
 \end{code}
 
