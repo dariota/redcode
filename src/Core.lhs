@@ -1,6 +1,6 @@
 \begin{code}
 module Core (
-    core, lookup, insert
+    Core, core, lookup, insert
 ) where
 
 import Prelude hiding (lookup)

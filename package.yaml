@@ -16,9 +16,11 @@ description:         Please see the README on Github at <https://github.com/dari
 
 dependencies:
 - base >= 4.7 && < 5
+- containers
 
 library:
-  source-dirs: src
+  source-dirs:
+    - src
 
 executables:
   redcode-exe:
