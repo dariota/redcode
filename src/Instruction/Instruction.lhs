@@ -1,7 +1,7 @@
 \begin{code}
-module Instruction
-    ( Instruction, defaultIns, aField, bField,
-      Value
+module Instruction.Instruction
+    ( Instruction(..), defaultIns, aField, bField, withA, withB,
+      Value(..), valuePart, swapValue
     ) where
 
 import Data.Char (isDigit, toLower, isSpace)
@@ -9,7 +9,7 @@ import Data.Char (isDigit, toLower, isSpace)
 
 Instructions are composed of an opcode and up to two fields, A and B, each containing a value. These values have their own semantics. In instructions where only one field is used, the other field is zero.
 
-We define convenience functions, aField and bField, which return instructions' fields or the default value.
+We define convenience functions, aField and bField, which return instructions' fields or the default value, and also functions to swap out the values in the a or b field.
 
 \begin{code}
 data Instruction = Dat Value
@@ -52,6 +52,34 @@ bField ins = case ins of
                 Djn _ v -> v
                 Cmp _ v -> v
                 Spl _   -> defaultVal
+
+withA :: Instruction -> Int -> Instruction
+withA ins i = case ins of
+    Dat b   -> Dat b
+    Mov a b -> Mov (swap a) b
+    Add a b -> Add (swap a) b
+    Sub a b -> Sub (swap a) b
+    Jmp a   -> Jmp (swap a)
+    Jmz a b -> Jmz (swap a) b
+    Jmn a b -> Jmn (swap a) b
+    Djn a b -> Djn (swap a) b
+    Cmp a b -> Cmp (swap a) b
+    Spl a   -> Spl (swap a)
+    where swap = swapValue i
+
+withB :: Instruction -> Int -> Instruction
+withB ins i = case ins of
+    Dat b   -> Dat (swap b)
+    Mov a b -> Mov a (swap b)
+    Add a b -> Add a (swap b)
+    Sub a b -> Sub a (swap b)
+    Jmp a   -> Jmp a
+    Jmz a b -> Jmz a (swap b)
+    Jmn a b -> Jmn a (swap b)
+    Djn a b -> Djn a (swap b)
+    Cmp a b -> Cmp a (swap b)
+    Spl a   -> Spl a
+    where swap = swapValue i
 \end{code}
 
 Values are comprised of two parts, the value and the addressing mode. The addressing mode may be ignored depending on the instruction.
@@ -65,6 +93,22 @@ data Value = Direct Int
 
 defaultVal :: Value
 defaultVal = Direct 0
+\end{code}
+
+We'll want to be able to update instructions by swapping out their value part.
+
+\begin{code}
+valuePart :: Value -> Int
+valuePart (Direct a) = a
+valuePart (Indirect a) = a
+valuePart (Immediate a) = a
+valuePart (Autodecrement a) = a
+
+swapValue :: Int -> Value -> Value
+swapValue i (Direct _) = Direct i
+swapValue i (Indirect _) = Indirect i
+swapValue i (Immediate _) = Immediate i
+swapValue i (Autodecrement _) = Autodecrement i
 \end{code}
 
 We want to be able to parse redcode programs, so we'll need a custom Read instance for Instruction, which will require one for Value as well. Since Value is the simpler one (and we'll need it to parse the Instruction anyway), we'll start with that. (with thanks to this StackOverflow answer for showing a clear and simple implementation of Read https://stackoverflow.com/a/14006938/6519610)
@@ -123,4 +167,4 @@ readDouble op input =
     where dropIf c xs = if (head xs == c) then drop 1 xs else error $ "Expected " ++ [c] ++ " between values but got " ++ [head xs]
 \end{code}
 
-This concludes the definition of Instructions - actually executing them is the remit of the program/execution units.
+This concludes the definition of Instructions, with the effects of their execution defined elsewhere in the model to actually assign semantics to their execution.
