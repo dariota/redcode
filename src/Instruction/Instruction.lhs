@@ -117,7 +117,7 @@ We want to be able to parse redcode programs, so we'll need a custom Read instan
 instance Read Value where
     readsPrec _ input = 
         let (mode, rest1) = span (flip elem "$@#<") input
-            (num, rest2) = span isDigit rest1
+            (num, rest2) = span (\a -> isDigit a || a == '-') rest1
             value = read num :: Int
             addressing = case mode of
                          ""        -> Direct
