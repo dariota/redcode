@@ -22,7 +22,6 @@ data Instruction = Dat Value
                  | Djn Value Value
                  | Cmp Value Value
                  | Spl Value
-                 deriving (Show)
 
 defaultIns :: Instruction
 defaultIns = Dat (Direct 0)
@@ -89,7 +88,6 @@ data Value = Direct Int
            | Indirect Int
            | Immediate Int
            | Autodecrement Int
-           deriving (Show)
 
 defaultVal :: Value
 defaultVal = Direct 0
@@ -168,3 +166,28 @@ readDouble op input =
 \end{code}
 
 This concludes the definition of Instructions, with the effects of their execution defined elsewhere in the model to actually assign semantics to their execution.
+
+However, since we've defined read, and we'd like `read . show` to be equivalent to `id`, we'll define show for Value and Instruction, rather than deriving it. This will also be useful elsewhere for pretty printing.
+
+\begin{code}
+instance Show Value where
+    show (Direct a) = "$" ++ (show a)
+    show (Indirect a) = "@" ++ (show a)
+    show (Immediate a) = "#" ++ (show a)
+    show (Autodecrement a) = "<" ++ (show a)
+
+instance Show Instruction where
+    show (Dat v1)        = "DAT " ++ (show v1)
+    show ins@(Mov v1 v2) = show2 "MOV" ins
+    show ins@(Add v1 v2) = show2 "ADD" ins
+    show ins@(Sub v1 v2) = show2 "SUB" ins
+    show (Jmp v1)        = "JMP " ++ (show v1)
+    show ins@(Jmz v1 v2) = show2 "JMZ" ins
+    show ins@(Jmn v1 v2) = show2 "JMN" ins
+    show ins@(Djn v1 v2) = show2 "DJN" ins
+    show ins@(Cmp v1 v2) = show2 "CMP" ins
+    show (Spl v1)        = "SPL " ++ (show v1)
+
+show2 :: String -> Instruction -> String
+show2 op ins = op ++ " " ++ (show $ aField ins) ++ ", " ++ (show $ bField ins)
+\end{code}
