@@ -1,6 +1,6 @@
 \begin{code}
 module Instruction.Execute (
-    execute, executeArith, decrementAt
+    execute
 ) where
 
 import Prelude hiding (lookup)
@@ -56,4 +56,4 @@ decrementAt i c = (bVal, insert c i ins')
 
 Note that for the Jmz/Jmn instruction, it has been assumed that "doing nothing" means taking the default behaviour of moving 1 step forward.
 
-Also, this is a clear absolute mess, and the core should probably have instead been a monad in which these instructions execute - unfortunately between this and other assignments I don't have the time to redesign this to fix it at the moment :(
+This could be cleaned up using a sensible structure for the resolution of the address fields, such as putting the core in the state monad.
