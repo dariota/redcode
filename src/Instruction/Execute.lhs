@@ -25,6 +25,7 @@ execute p c = executeIns p (lookup c p) c
 executeIns :: Int -> Instruction -> Core -> ((PcUpdate, PcUpdate), Core)
 executeIns pos ins c = case ins of
     Dat _     -> ((Nothing, Nothing), c)
+    Mov _  _  -> (defU, executeMov pos ins c)
     Add v1 _  -> (defU, insert cB resolvedB $ executeArith bIns $ valuePart v1)
     Sub v1 _  -> (defU, insert cB resolvedB $ executeArith bIns $ -(valuePart v1))
     Jmp _     -> ((Just resolvedA, Nothing), cA)
@@ -55,5 +56,19 @@ decrementAt i c = (bVal, insert c i ins')
 \end{code}
 
 Note that for the Jmz/Jmn instruction, it has been assumed that "doing nothing" means taking the default behaviour of moving 1 step forward.
+
+The mov instruction is separately implemented due to some complexity around how it treats its two fields.
+
+\begin{code}
+executeMov :: Int -> Instruction -> Core -> Core
+executeMov _ (Mov _ (Immediate _)) _ = error "MOV B Field must not be immediate"
+executeMov i ins@(Mov (Immediate a) vb) c = insert cB resolvedB (Dat (Direct a))
+    where (resolvedB, cB) = resolve i (bField ins) c
+executeMov i ins@(Mov va vb) c = insert cAB' resolvedB' (lookup cAB' resolvedA')
+    where aFie = aField ins
+          bFie = bField ins
+          (resolvedA', cAB) = resolve i aFie c
+          (resolvedB', cAB') = resolve i bFie cAB
+\end{code}
 
 This could be cleaned up using a sensible structure for the resolution of the address fields, such as putting the core in the state monad.
