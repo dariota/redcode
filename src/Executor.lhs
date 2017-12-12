@@ -1,6 +1,6 @@
 \begin{code}
 module Executor (
-    executor, step, size
+    Executor, executor, step, size
 ) where
 
 import Core
@@ -25,13 +25,12 @@ size (Executor xs) = length xs
 We want to pass the core to the executor and have it execute a single step (with its next task), then return the modified core and new executor, or nothing if all tasks have ended.
 
 \begin{code}
-step :: Executor -> Core -> (Maybe Executor, Core)
-step (Executor []) c     = (Nothing, c)
+step :: Executor -> Core -> (Executor, Core)
+step e@(Executor []) c     = (e, c)
 step (Executor (t:ts)) c = (mExec, nC)
     where ((nT, child), nC) = execute t c
           childTail = if child == Nothing then [] else [fromJust child]
-          mExec' = if nT == Nothing then Executor ts else Executor $ ts ++ childTail ++ [fromJust nT]
-          mExec = if size mExec' == 0 then Nothing else Just mExec'
+          mExec = if nT == Nothing then Executor ts else Executor $ ts ++ childTail ++ [fromJust nT]
 \end{code}
 
 In order to actually execute this, we now need to put it in a thread that repeatedly calls step while the simulation is running, managing the sharing of the core and cleanup of the executor when it terminates.
