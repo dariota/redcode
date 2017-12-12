@@ -33,15 +33,15 @@ executeIns pos ins c = case ins of
     Jmn _  _  -> (if resolvedB /= 0 then (Just resolvedA, Nothing) else defU, cB)
     Djn _  _  -> (if decResult /= 0 then (Just resolvedA, Nothing) else defU, cDjn)
     Cmp _  _  -> (if resolvedA == resolvedB then defU else (Just 2, Nothing), cAB')
-    Spl _     -> ((Just 1, Just resolvedA), cA)
+    Spl _     -> ((defI, Just resolvedA), cA)
     where aFie = aField ins
           bFie = bField ins
           (resolvedA, cA) = resolve pos aFie c
           (resolvedB, cB) = resolve pos bFie c
-          (resolvedA', cAB) = resolve pos aFie c
-          (resolvedB', cAB') = resolve pos bFie c
+          (resolvedB', cAB') = resolve pos bFie cA
           bIns = lookup c resolvedB
-          defU = (Just 1, Nothing)
+          defI = Just (1 + pos)
+          defU = (defI, Nothing)
           (decResult, cDjn) = decrementAt resolvedB cAB'
 
 executeArith :: Instruction -> Int -> Instruction
