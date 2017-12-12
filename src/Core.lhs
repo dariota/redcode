@@ -1,6 +1,6 @@
 \begin{code}
 module Core (
-    Core, core, lookup, insert, positionPrograms
+    Core, core, lookup, insert, positionPrograms, display
 ) where
 
 import Prelude hiding (lookup)
@@ -30,7 +30,7 @@ core size = Core size Map.empty
 adjust :: Int -> Int -> Int
 adjust size i = bounded
     where moded = i `mod` size
-          bounded = if moded < 0 then moded + size else moded
+          bounded = if moded <= 0 then moded + size else moded
 
 lookup :: Core -> Int -> Instruction
 lookup (Core size map) pos = Map.findWithDefault defaultIns ind map
@@ -81,4 +81,18 @@ insertAt c _ [] = c
 insertAt c i (x:xs) = c'
     where c'' = insert c i x
           c' = insertAt c'' (i+1) xs
+\end{code}
+
+For the purposes of a neat interface, we'll want to print the modified contents of the core in a nice way.
+
+\begin{code}
+display :: Core -> String
+display (Core size map) = foldl (\acc (pos, ins) -> acc ++ (align pos size) ++ " " ++ (show ins) ++ "\n") "" vals
+    where vals = Map.assocs map
+
+align :: Int -> Int -> String
+align i size = (replicate diff ' ') ++ iS
+    where iS = show i
+          sizeS = show size
+          diff = (length sizeS) - (length iS)
 \end{code}

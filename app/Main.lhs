@@ -79,7 +79,7 @@ examineTask (sigChan, mCore, taskChan) count = forever $ do
     atomically $ writeTChan sigChan True
     taskMap <- fillMap count taskChan Map.empty
     core <- takeMVar mCore
-    putStrLn $ show $ core
+    putStrLn $ display core
     putMVar mCore core
     putStrLn $ show $ Map.assocs taskMap
 
