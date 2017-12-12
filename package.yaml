@@ -17,6 +17,7 @@ description:         Please see the README on Github at <https://github.com/dari
 dependencies:
 - base >= 4.7 && < 5
 - containers
+- stm
 
 library:
   source-dirs:
@@ -24,7 +25,7 @@ library:
 
 executables:
   redcode-exe:
-    main:                Main.hs
+    main:                Main.lhs
     source-dirs:         app
     ghc-options:
     - -threaded
