@@ -1,6 +1,6 @@
 \begin{code}
 module Core (
-    Core, core, lookup, insert
+    Core, core, lookup, insert, insertAt
 ) where
 
 import Prelude hiding (lookup)
@@ -35,4 +35,14 @@ lookup (Core size map) pos = Map.findWithDefault defaultIns ind map
 insert :: Core -> Int -> Instruction -> Core
 insert (Core size map) pos ins = Core size newMap
     where newMap = Map.insert (adjust size pos) ins map 
+\end{code}
+
+We'll want to insert entire programs at certain locations when initialising the core.
+
+\begin{code}
+insertAt :: Core -> Int -> [Instruction] -> Core
+insertAt c _ [] = c
+insertAt c i (x:xs) = c'
+    where c'' = insert c i x
+          c' = insertAt c'' (i+1) xs
 \end{code}
