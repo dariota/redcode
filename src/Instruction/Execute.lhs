@@ -64,7 +64,7 @@ executeMov :: Int -> Instruction -> Core -> Core
 executeMov _ (Mov _ (Immediate _)) _ = error "MOV B Field must not be immediate"
 executeMov i ins@(Mov (Immediate a) vb) c = insert cB resolvedB (Dat (Direct a))
     where (resolvedB, cB) = resolve i (bField ins) c
-executeMov i ins@(Mov va vb) c = insert cAB' resolvedB' (lookup cAB' resolvedA')
+executeMov i ins c = insert cAB' resolvedB' (lookup cAB' resolvedA')
     where aFie = aField ins
           bFie = bField ins
           (resolvedA', cAB) = resolve i aFie c

@@ -13,16 +13,16 @@ We'll want to be able to resolve a value to the actual value it refers to given 
 \begin{code}
 resolve :: Int -> Value -> Core -> (Int, Core)
 resolve i (Direct a) c = (i + a, c)
-resolve i (Indirect a) c = resolveImmediate i a c
+resolve i (Indirect a) c = resolveIndirect i a c
 resolve i (Immediate a) c = (a, c)
-resolve i (Autodecrement a) c = resolveImmediate i (valuePart $ bField targeted') c'
+resolve i (Autodecrement a) c = resolveIndirect i (valuePart $ bField targeted') c'
     where targeted = lookup c (i + a)
           targetValue = valuePart $ bField targeted
           targeted' = withB targeted (targetValue - 1)
           c' = insert c (i + a) targeted'
 
-resolveImmediate :: Int -> Int -> Core -> (Int, Core)
-resolveImmediate i a c = (i + refValue, c)
+resolveIndirect :: Int -> Int -> Core -> (Int, Core)
+resolveIndirect i a c = (i + refValue, c)
     where referenced = lookup c (i + a)
           refValue = valuePart $ bField referenced
 \end{code}
