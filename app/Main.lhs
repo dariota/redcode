@@ -15,22 +15,52 @@ import Control.Concurrent.MVar
 import qualified Data.Map.Strict as Map
 import System.Environment
 
+import Text.Read
+
 import Data.Maybe (fromJust, isNothing)
 \end{code}
 
-We want to invoke the MARS by passing in the core size and a list of filenames containing the programs to position in the core before execution.
+We want to invoke the MARS by passing in the core size, number of steps to take, delay between steps (delay in ms, or manual to manually step the simulation), and a list of filenames containing the programs to position in the core before execution.
 
 \begin{code}
 main :: IO ()
 main = do
     args <- getArgs
-    let coreSize = read (head args) :: Int
-    progTexts <- sequence $ map readFile (tail args)
+    let coreSize = validateCoreSize $ head args
+    let steps = validateSteps $ args !! 1
+    let delayFunc = getStepFunc $ args !! 2
+    progTexts <- sequence $ map readFile (drop 3 args)
     let (executors, nCore) = createCore coreSize $ map readProgram progTexts
     context <- createContext nCore
     let workers = map (forkIO . (workHelper context)) executors
     sequence_ workers
-    examineTask context (length workers)
+    examineTask context (length workers) steps delayFunc
+
+validateCoreSize :: String -> Int
+validateCoreSize = validateInt "Core size"
+
+validateSteps :: String -> Int
+validateSteps = validateInt "Step count"
+
+getStepFunc :: String -> IO ()
+getStepFunc s = delayFunc
+    where delay'' = readMaybe s :: Maybe Int
+          delay' = if isNothing delay'' then error "Step function must be a number" else fromJust delay''
+          delay = if delay' >= 0 then delay' else error "Step delay must be non-negative"
+          manualStep = if s == "manual" then True else False
+          delayFunc = if manualStep then manualStepper else threadDelay $ delay * 10 ^ 3
+
+manualStepper :: IO ()
+manualStepper = do
+    putStrLn "Press enter to step"
+    getChar
+    return ()
+
+validateInt :: String -> String -> Int
+validateInt item s = res
+    where res'' = readMaybe s :: Maybe Int
+          res' = if isNothing res'' then error $ item ++ " must be a number" else fromJust res''
+          res = if res' > 0 then res' else error $ item ++ " must be positive"
 \end{code}
 
 Now we need to write the helper functions used to initialise the MARS. We start with the core creation, which creates a core of the specified size, and positions and labels all the programs in it (using the core's own positioning function, which spaces them evenly).
@@ -72,16 +102,17 @@ workHelper (step, mCore, taskChan) (label, exec) = do
 Lastly, we need to implement examineTask - this allows the user to control the stepping of the workers, printing out how many tasks each worker has remaining after each step of execution.
 
 \begin{code}
-examineTask :: (TChan Bool, MVar Core, TChan (Char, Int)) -> Int -> IO ()
-examineTask (sigChan, mCore, taskChan) count = forever $ do
-    putStrLn "Press enter to step"
-    getChar
+examineTask :: (TChan Bool, MVar Core, TChan (Char, Int)) -> Int -> Int -> IO () -> IO ()
+examineTask _ _ 0 _ = return ()
+examineTask ctxt@(sigChan, mCore, taskChan) count steps delayFunc = do
+    delayFunc
     atomically $ writeTChan sigChan True
     taskMap <- fillMap count taskChan Map.empty
     core <- takeMVar mCore
     putStrLn $ display core
     putMVar mCore core
     putStrLn $ show $ Map.assocs taskMap
+    examineTask ctxt count (steps - 1) delayFunc
 
 fillMap :: Int -> TChan (Char, Int) -> Map.Map Char Int -> IO (Map.Map Char Int)
 fillMap 0 _ m = return m
