@@ -108,6 +108,7 @@ examineTask ctxt@(sigChan, mCore, taskChan) count steps delayFunc = do
     putStrLn $ display core
     putMVar mCore core
     putStrLn $ show $ Map.assocs taskMap
+    putStrLn $ "\n" ++ (show (steps - 1)) ++ " steps remaining\n"
     examineTask ctxt count (steps - 1) delayFunc
 
 fillMap :: Int -> TChan (Char, Int) -> Map.Map Char Int -> IO (Map.Map Char Int)
