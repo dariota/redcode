@@ -30,7 +30,7 @@ main = do
     let steps = validateSteps $ args !! 1
     let delayFunc = getStepFunc $ args !! 2
     progTexts <- sequence $ map readFile (drop 3 args)
-    let (executors, nCore) = createCore coreSize $ map readProgram progTexts
+    (executors, nCore) <- createCore coreSize $ map readProgram progTexts
     context <- createContext nCore
     let workers = map (forkIO . (workHelper context)) executors
     sequence_ workers
@@ -65,16 +65,12 @@ validateInt item s = res
 
 Now we need to write the helper functions used to initialise the MARS. We start with the core creation, which creates a core of the specified size, and positions and labels all the programs in it (using the core's own positioning function, which spaces them evenly).
 
-We don't want to worry about unpacking Maybes in main just to throw an error, so we guarantee something will be returned and give a meaningful error message if we can't create the core.
-
 \begin{code}
-createCore :: Int -> [[Instruction]] -> ([(Char, Executor)], Core)
-createCore size progs = if isNothing tentativeCore then error "Insufficient space for programs in core" else fullCore
-    where tentativeCore = positionPrograms (core size) progs
-          (execPositions, nCore) = fromJust tentativeCore
-          executors = map executor execPositions
-          labels = ['A'..]
-          fullCore = (zip labels executors, nCore)
+createCore :: Monad m => Int -> [[Instruction]] -> m ([(Char, Executor)], Core)
+createCore size progs = do
+    (positions, newCore) <- positionPrograms (core size) progs
+    let executors = map executor positions
+    return (zip ['A'..] executors, newCore)
 \end{code}
 
 Next, we want to create all the required channels and MVar required for the worker threads at once.
