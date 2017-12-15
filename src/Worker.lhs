@@ -8,6 +8,7 @@ import Executor
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TChan
 import Control.Concurrent.MVar
+import Control.Monad.Trans.State
 \end{code}
 
 We want to be able to control the simulation stepping externally, so that we can limit the number of steps, or the speed at which the steps execute, and also indicate when to terminate.
@@ -31,22 +32,21 @@ signalTask :: TaskChan -> TaskLabel -> Int -> IO ()
 signalTask tchan label count = atomically $ writeTChan tchan (label, count) 
 \end{code}
 
-A worker must be able to determine when to take a step (using the Stepper), access the shared core, simulate a step of its executors, and signal to a listener how many tasks were created or terminated on each step (using the TaskChan above).
+A worker must be able to determine when to take a step (using the Stepper), access the shared core, simulate a step of its executors, and signal to a listener how many tasks remain after each step (using the TaskChan above).
 
 The core will be shared using an MVar, as only one executor can act on the core at a time anyway. Workers will retrieve the core, execute a single step using their executor if the simulation is still running, report the task count, and repeat.
 
 \begin{code}
-worker :: Stepper -> MVar Core -> TaskChan -> TaskLabel -> Executor -> IO ()
+worker :: Stepper -> MVar (Mars) -> TaskChan -> TaskLabel -> Executor -> IO ()
 worker stepper mcore tchan label exec = do
     continue <- takeStep stepper
     if continue then
         do
             core <- takeMVar mcore
-            let (exec', core') = step exec core
+            let (exec', core') = runState (step exec) core
             putMVar mcore core'
             signalTask tchan label $ size exec'
             worker stepper mcore tchan label exec'
     else
         return ()
 \end{code}
-            
