@@ -11,18 +11,21 @@ import Core
 We'll want to be able to resolve a value to the actual value it refers to given the core, and also update the core if needed (for example, for a auto-decrement).
 
 \begin{code}
-resolve :: Int -> Value -> Core -> (Int, Core)
-resolve i (Direct a) c = (i + a, c)
-resolve i (Indirect a) c = resolveIndirect i a c
-resolve i (Immediate a) c = (a, c)
-resolve i (Autodecrement a) c = resolveIndirect i (valuePart $ bField targeted') c'
-    where targeted = lookup c (i + a)
-          targetValue = valuePart $ bField targeted
-          targeted' = withB targeted (targetValue - 1)
-          c' = insert c (i + a) targeted'
+resolve :: Int -> Value -> Core Int
+resolve currPos (Direct val) = pure $ currPos + val
+resolve currPos (Indirect val) = resolveIndirect currPos val
+resolve currPos (Immediate val) = pure val
+resolve currPos (Autodecrement val) = do
+    let refPos = currPos + val
+    referenced <- lookup refPos
+    let refVal = valuePart $ bField referenced
+    let newRef = withB referenced (refVal - 1)
+    insert refPos newRef
+    resolveIndirect currPos val
 
-resolveIndirect :: Int -> Int -> Core -> (Int, Core)
-resolveIndirect i a c = (i + refValue, c)
-    where referenced = lookup c (i + a)
-          refValue = valuePart $ bField referenced
+resolveIndirect :: Int -> Int -> Core Int
+resolveIndirect currPos val = do
+    referenced <- lookup (currPos + val)
+    let refValue = valuePart $ bField referenced
+    pure $ currPos + refValue
 \end{code}
