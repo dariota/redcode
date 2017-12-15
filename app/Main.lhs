@@ -36,16 +36,27 @@ main = do
     sequence_ workers
     examineTask context (length workers) steps delayFunc
 
+-- helper functions to read ints from CLI args
 validateCoreSize :: String -> Int
 validateCoreSize = validateInt "Core size"
 
 validateSteps :: String -> Int
 validateSteps = validateInt "Step count"
 
+validateInt :: String -> String -> Int
+validateInt item s = res
+    where res'' = readMaybe s :: Maybe Int
+          res' = if isNothing res'' then error $ item ++ " must be a number" else fromJust res''
+          res = if res' > 0 then res' else error $ item ++ " must be positive"
+\end{code}
+
+We want the user to be able to specify either a number of ms between steps, or "manual" if they want to drive updates manually. We create a delay function that either prompts the user, or simply waits the number of milliseconds given.
+
+\begin{code}
 getStepFunc :: String -> IO ()
 getStepFunc s = delayFunc
     where delay'' = readMaybe s :: Maybe Int
-          delay' = if isNothing delay'' then error "Step function must be a number" else fromJust delay''
+          delay' = if isNothing delay'' then error "Step function must be a number or \"manual\"" else fromJust delay''
           delay = if delay' >= 0 then delay' else error "Step delay must be non-negative"
           manualStep = if s == "manual" then True else False
           delayFunc = if manualStep then manualStepper else threadDelay $ delay * 10 ^ 3
@@ -55,12 +66,6 @@ manualStepper = do
     putStrLn "Press enter to step"
     getChar
     return ()
-
-validateInt :: String -> String -> Int
-validateInt item s = res
-    where res'' = readMaybe s :: Maybe Int
-          res' = if isNothing res'' then error $ item ++ " must be a number" else fromJust res''
-          res = if res' > 0 then res' else error $ item ++ " must be positive"
 \end{code}
 
 Now we need to write the helper functions used to initialise the MARS. We start with the core creation, which creates a core of the specified size, and positions and labels all the programs in it (using the core's own positioning function, which spaces them evenly).
