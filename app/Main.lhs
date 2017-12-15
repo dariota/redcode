@@ -8,6 +8,7 @@ import Parser
 import Instruction.Instruction
 
 import Control.Monad
+import Control.Monad.Trans.State
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TChan
@@ -66,17 +67,17 @@ validateInt item s = res
 Now we need to write the helper functions used to initialise the MARS. We start with the core creation, which creates a core of the specified size, and positions and labels all the programs in it (using the core's own positioning function, which spaces them evenly).
 
 \begin{code}
-createCore :: Monad m => Int -> [[Instruction]] -> m ([(Char, Executor)], Core)
-createCore size progs = do
-    (positions, newCore) <- positionPrograms (core size) progs
-    let executors = map executor positions
-    return (zip ['A'..] executors, newCore)
+createCore :: Monad m => Int -> [[Instruction]] -> m ([(Char, Executor)], Mars)
+createCore size progs = return $ runState (do
+    positions <- positionPrograms progs
+    let executors = map executor (join positions)
+    pure $ zip ['A'..] executors) (core size)
 \end{code}
 
 Next, we want to create all the required channels and MVar required for the worker threads at once.
 
 \begin{code}
-createContext :: Core -> IO (TChan Bool, MVar Core, TChan (Char, Int))
+createContext :: Mars -> IO (TChan Bool, MVar Mars, TChan (Char, Int))
 createContext nCore = do
     stepChan <- atomically $ newTChan
     mCore <- newMVar nCore
@@ -89,7 +90,7 @@ Now we want to conveniently consume that context and produced a curried function
 Note that we need to clone the stepper channel - this is due to the source channel being a broadcast channel (i.e. write-only) and to ensure each worker has its own read pointer within the channel.
 
 \begin{code}
-workHelper :: (TChan Bool, MVar Core, TChan (Char, Int)) -> (Char, Executor) -> IO ()
+workHelper :: (TChan Bool, MVar Mars, TChan (Char, Int)) -> (Char, Executor) -> IO ()
 workHelper (step, mCore, taskChan) (label, exec) = do
     myStep <- atomically $ cloneTChan step
     worker myStep mCore taskChan label exec
@@ -98,7 +99,7 @@ workHelper (step, mCore, taskChan) (label, exec) = do
 Lastly, we need to implement examineTask - this allows the user to control the stepping of the workers, printing out how many tasks each worker has remaining after each step of execution.
 
 \begin{code}
-examineTask :: (TChan Bool, MVar Core, TChan (Char, Int)) -> Int -> Int -> IO () -> IO ()
+examineTask :: (TChan Bool, MVar Mars, TChan (Char, Int)) -> Int -> Int -> IO () -> IO ()
 examineTask _ _ 0 _ = return ()
 examineTask ctxt@(sigChan, mCore, taskChan) count steps delayFunc = do
     delayFunc
