@@ -7,16 +7,15 @@ import Executor
 import Parser
 import Instruction.Instruction
 
-import Control.Monad
-import Control.Monad.Trans.State
-import Control.Concurrent
+import Control.Monad (join)
+import Control.Monad.Trans.State (runState)
+import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM
-import Control.Concurrent.STM.TChan
-import Control.Concurrent.MVar
-import qualified Data.Map.Strict as Map
-import System.Environment
+import Control.Concurrent.MVar (MVar, takeMVar, putMVar, newMVar)
+import qualified Data.Map.Strict as Map (Map, assocs, empty, insert)
+import System.Environment (getArgs)
 
-import Text.Read
+import Text.Read (readMaybe)
 
 import Data.Maybe (fromJust, isNothing)
 \end{code}
