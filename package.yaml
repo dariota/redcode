@@ -18,6 +18,8 @@ dependencies:
 - base >= 4.7 && < 5
 - containers
 - stm
+- transformers
+- mtl
 
 library:
   source-dirs:
