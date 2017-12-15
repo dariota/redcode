@@ -12,47 +12,102 @@ import Core
 
 This module will define only the semantics of instruction execution. That is, given an instruction it will determine what effect executing it would have (adjusting the program counter, creating new instructions etc).
 
-We need access to the memory in order to execute instructions, so we take in a position and the core, and return an update to the program counter (or nothing, if execution of the instruction would cause termination) as well as the core after execution of the instruction.
+These functions execute in the context of the Core's state monad, which makes tracking its state changes as references are resolved and commands executed easy. We simply take in a position to execute a command at and perform all the required actions. We then return a tuple indicating the program counter after execution of the specified command.
 
-However, we also need to cater for the SPL instruction, which can result in a new task being created. Hence, we return two program counter updates - the first for the current task, the second for the creation of a new task if relevant.
+However, we also need to cater for the SPL instruction, which can result in a new task being created. Hence, we return two program counter updates - the first for the current task, the second for the creation of a new task if relevant. If we wanted to generalise to the possibility of creating n tasks per instruction executed, we could simply replace the tuple with a list.
 
 \begin{code}
 type PcUpdate = Maybe Int
 
-execute :: Int -> Core -> ((PcUpdate, PcUpdate), Core)
-execute p c = executeIns p (lookup c p) c
+execute :: Int -> Core (PcUpdate, PcUpdate)
+execute p = do
+    ins <- lookup p
+    executeIns p ins
 
-executeIns :: Int -> Instruction -> Core -> ((PcUpdate, PcUpdate), Core)
-executeIns pos ins c = case ins of
-    Dat _     -> ((Nothing, Nothing), c)
-    Mov _  _  -> (defU, executeMov pos ins c)
-    Add v1 _  -> (defU, insert cB resolvedB $ executeArith bIns $ valuePart v1)
-    Sub v1 _  -> (defU, insert cB resolvedB $ executeArith bIns $ -(valuePart v1))
-    Jmp _     -> ((Just resolvedA, Nothing), cA)
-    Jmz _  _  -> (if resolvedB == 0 then (Just resolvedA, Nothing) else defU, cB)
-    Jmn _  _  -> (if resolvedB /= 0 then (Just resolvedA, Nothing) else defU, cB)
-    Djn _  _  -> (if decResult /= 0 then (Just resolvedA, Nothing) else defU, cDjn)
-    Cmp _  _  -> (if resolvedA == resolvedB then defU else (Just 2, Nothing), cAB')
-    Spl _     -> ((defI, Just resolvedA), cA)
-    where aFie = aField ins
-          bFie = bField ins
-          (resolvedA, cA) = resolve pos aFie c
-          (resolvedB, cB) = resolve pos bFie c
-          (resolvedB', cAB') = resolve pos bFie cA
-          bIns = lookup c resolvedB
-          defI = Just (1 + pos)
+executeIns :: Int -> Instruction -> Core (PcUpdate, PcUpdate)
+executeIns pos ins = case ins of
+    -- terminate execution - the PC becomes Nothing
+    Dat _     -> pure $ (Nothing, Nothing)
+    -- More complicated, see below
+    Mov _  _  -> do
+        executeMov pos ins
+        pure $ defU
+    -- Add whatever the A field resolves to to whatever the B field resolves to
+    Add _ _  -> do
+        (aRef, bRef) <- resolveRefs pos ins
+        executeArith bRef aRef
+        pure $ defU
+    -- Same as Add, but with a negative delta
+    Sub _  _  -> do
+        (aRef, bRef) <- resolveRefs pos ins
+        executeArith bRef $ -aRef
+        pure defU
+    -- Jump to whatever the A field resolves to
+    Jmp _     -> do
+        aRef <- resolve pos (aField ins)
+        pure $ (Just aRef, Nothing)
+    -- Jump to whatever the A field resolves to if the B field resolves to 0
+    Jmz _  _  -> do
+        (aRef, bRef) <- resolveRefs pos ins
+        if bRef == 0 then
+            pure (Just aRef, Nothing)
+        else
+            pure defU
+    -- Like Jmz, but jumps if the B field doesn't resolve to 0
+    Jmn _  _  -> do
+        (aRef, bRef) <- resolveRefs pos ins
+        if bRef /= 0 then
+            pure (Just aRef, Nothing)
+        else
+            pure defU
+    -- Like Jmn, but decrements what the B field resolves to first
+    Djn _  _  -> do
+        (aRef, bRef) <- resolveRefs pos ins
+        decResult <- decrementAt bRef
+        if decResult /= 0 then
+            pure (Just aRef, Nothing)
+        else
+            pure defU
+    -- Skips an instruction if the fields resolve to the same thing
+    Cmp _  _  -> do
+        (aRef, bRef) <- resolveRefs pos ins
+        if aRef == bRef then
+            pure defU
+        else
+            pure (Just (2 + pos), Nothing)
+    -- Creates a new task wherever the A field resolves to
+    Spl _     -> do
+        aRef <- resolve pos $ aField ins
+        pure (defI, Just aRef)
+    where defI = Just (1 + pos)
           defU = (defI, Nothing)
-          (decResult, cDjn) = decrementAt resolvedB cAB'
+\end{code}
 
-executeArith :: Instruction -> Int -> Instruction
-executeArith ins i = withB ins (insB + i)
-    where insB = valuePart $ bField ins
+Pretty much every instruction needs both of its fields resolved, so we define a helper function to handle this, ensuring they're always resolved in the same order since field resolution can have side effects (Autodecrement values).
 
-decrementAt :: Int -> Core -> (Int, Core)
-decrementAt i c = (bVal, insert c i ins')
-    where ins = lookup c i
-          ins' = executeArith ins (-1)
-          bVal = valuePart $ bField ins'
+\begin{code}
+resolveRefs :: Int -> Instruction -> Core (Int, Int)
+resolveRefs pos ins = do
+    aRef <- resolve pos (aField ins)
+    bRef <- resolve pos (bField ins)
+    pure (aRef, bRef)
+\end{code}
+
+Since a few instructions need to perform arithmetic, we define a helper function to handle that for us too.
+
+\begin{code}
+executeArith :: Int -> Int -> Core ()
+executeArith insPos delta = do
+    instruction <- lookup insPos
+    let val = valuePart $ bField instruction
+    let updated = withB instruction (val + delta)
+    insert insPos updated
+
+decrementAt :: Int -> Core Int
+decrementAt i = do
+    executeArith i (-1)
+    refIns <- lookup i
+    pure $ valuePart $ bField refIns
 \end{code}
 
 Note that for the Jmz/Jmn instruction, it has been assumed that "doing nothing" means taking the default behaviour of moving 1 step forward.
@@ -60,15 +115,13 @@ Note that for the Jmz/Jmn instruction, it has been assumed that "doing nothing" 
 The mov instruction is separately implemented due to some complexity around how it treats its two fields.
 
 \begin{code}
-executeMov :: Int -> Instruction -> Core -> Core
-executeMov _ (Mov _ (Immediate _)) _ = error "MOV B Field must not be immediate"
-executeMov i ins@(Mov (Immediate a) vb) c = insert cB resolvedB (Dat (Direct a))
-    where (resolvedB, cB) = resolve i (bField ins) c
-executeMov i ins c = insert cAB' resolvedB' (lookup cAB' resolvedA')
-    where aFie = aField ins
-          bFie = bField ins
-          (resolvedA', cAB) = resolve i aFie c
-          (resolvedB', cAB') = resolve i bFie cAB
+executeMov :: Int -> Instruction -> Core ()
+executeMov _ (Mov _ (Immediate _)) = error "MOV B Field must not be immediate"
+executeMov i (Mov (Immediate a) vb) = do
+    bRef <- resolve i vb
+    insert bRef (Dat (Direct a))
+executeMov i ins = do
+    (aRef, bRef) <- resolveRefs i ins
+    toCopy <- lookup aRef
+    insert bRef toCopy
 \end{code}
-
-This could be cleaned up using a sensible structure for the resolution of the address fields, such as putting the core in the state monad.
