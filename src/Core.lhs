@@ -98,16 +98,9 @@ insertAt i (x:xs) = do
     insertAt (i + 1) xs
 \end{code}
 
-For the purposes of a neat interface, we'll want to print the modified contents of the core in a nice way.
+We want to be able to list all the instructions currently in the core for the interface, so we extract them with their index/memory position.
 
 \begin{code}
-display :: Mars -> String
-display (Mars size map) = foldl (\acc (pos, ins) -> acc ++ (align pos size) ++ " " ++ (show ins) ++ "\n") "" vals
-    where vals = Map.assocs map
-
-align :: Int -> Int -> String
-align i size = (replicate diff ' ') ++ iS
-    where iS = show i
-          sizeS = show size
-          diff = (length sizeS) - (length iS)
+display :: Mars -> [(Int, String)]
+display = map (\(x, y) -> (x, show y)) . Map.assocs . memory
 \end{code}
