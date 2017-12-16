@@ -26,10 +26,10 @@ Next, we want the worker to be able to signal to a listener how many tasks it ha
 
 \begin{code}
 type TaskLabel = Char
-type TaskChan = TChan (TaskLabel, Int)
+type TaskChan = TChan (TaskLabel, [Int])
 
-signalTask :: TaskChan -> TaskLabel -> Int -> IO ()
-signalTask tchan label count = atomically $ writeTChan tchan (label, count) 
+signalTask :: TaskChan -> TaskLabel -> [Int] -> IO ()
+signalTask tchan label positions = atomically $ writeTChan tchan (label, positions)
 \end{code}
 
 A worker must be able to determine when to take a step (using the Stepper), access the shared core, simulate a step of its executors, and signal to a listener how many tasks remain after each step (using the TaskChan above).
@@ -45,7 +45,7 @@ worker stepper mcore tchan label exec = do
             core <- takeMVar mcore
             let (exec', core') = runState (step exec) core
             putMVar mcore core'
-            signalTask tchan label $ size exec'
+            signalTask tchan label $ tasks exec'
             worker stepper mcore tchan label exec'
     else
         return ()

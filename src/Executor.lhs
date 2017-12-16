@@ -1,6 +1,6 @@
 \begin{code}
 module Executor (
-    Executor, executor, step, size
+    Executor, executor, step, size, tasks
 ) where
 
 import Core
@@ -13,7 +13,7 @@ An execution unit (or program) in redcode is a collection of tasks. A task is si
 We want to be able to specify where an executor should start its execution, so we define a function for this as well.
 
 \begin{code}
-data Executor = Executor [Int]
+data Executor = Executor {tasks :: [Int]}
 
 executor :: Int -> Executor
 executor start = Executor [start]
