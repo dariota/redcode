@@ -18,6 +18,10 @@ import System.Environment (getArgs)
 import Text.Read (readMaybe)
 
 import Data.Maybe (fromJust, isNothing)
+import Data.List (sort)
+
+import qualified Graphics.UI.Threepenny as UI
+import Graphics.UI.Threepenny.Core
 \end{code}
 
 We want to invoke the MARS by passing in the core size, number of steps to take, delay between steps (delay in ms, or manual to manually step the simulation), and a list of filenames containing the programs to position in the core before execution.
@@ -26,16 +30,16 @@ We want to invoke the MARS by passing in the core size, number of steps to take,
 main :: IO ()
 main = do
     args <- getArgs
-    let (cSize, steps, delayFunc, progFiles) = readArgs args
+    let (cSize, progFiles) = readArgs args
     progTexts <- sequence $ map readFile progFiles
     (executors, nCore) <- createCore cSize $ map readProgram progTexts
     context <- createContext nCore
     let workers = map (forkIO . (workHelper context)) executors
     sequence_ workers
-    examineTask context (length workers) steps delayFunc
+    runGUI context (length workers)
 
 -- helper functions to read inputs from CLI args
-readArgs :: [String] -> (Int, Int, IO (), [FilePath])
+readArgs :: [String] -> (Int, [FilePath])
 readArgs args = (coreSize, paths)
     where coreSize = validateCoreSize $ head args
           paths = tail args
@@ -81,26 +85,42 @@ workHelper (step, mCore, taskChan) (label, exec) = do
     worker myStep mCore taskChan label exec
 \end{code}
 
-Lastly, we need to implement examineTask - this allows the user to control the stepping of the workers, printing out how many tasks each worker has remaining after each step of execution.
+We now need to implement runGUI - this presents a threepenny-gui for the user to step through the program, viewing where the tasks currently are and what the instructions in the core are.
+
+The GUI will consist of a single button which takes one step through the simulation, and a table showing all the instructions in the core, along with a list of what instruction tasks in the various programs are currently being executed.
 
 \begin{code}
-examineTask :: (TChan Bool, MVar Mars, TChan (Char, Int)) -> Int -> Int -> IO () -> IO ()
-examineTask _ _ 0 _ = putStrLn "Time's up, no winner!"
-examineTask ctxt@(sigChan, mCore, taskChan) count steps delayFunc = do
-    delayFunc
+runGUI :: (TChan Bool, MVar Mars, TChan (Char, [Int])) -> Int -> IO ()
+runGUI ctxt@(sigChan, mCore, taskChan) count = startGUI defaultConfig (\w -> do
+    return w # set title "MARS"
+
+    initialCore <- liftIO $ readMVar mCore
+
+    step <- UI.button # set text ("Step")
+    coreTab <- UI.table #+ (tableHeader : (tableContents initialCore []))
+
+    stepBehaviour <- accumB mCore (const mCore <$ UI.click step)
+
+    getBody w #+ [column $ map element [step, coreTab]]
+
+    onEvent (stepBehaviour <@ UI.click step) $ \m -> do
+        (mars, taskList) <- liftIO $ takeStep ctxt count
+        element coreTab # set children []
+        element coreTab #+ (tableHeader : (tableContents mars taskList))
+        return ()
+
+    return ())
+\end{code}
+
+The step function sends a signal on the synchronisation channel for all workers to execute a single step. It then collects the list of program counters returned on the task channel and aggregates them with their labels into a list to be consumed by the table producing functions.
+
+\begin{code}
+takeStep :: (TChan Bool, MVar Mars, TChan (Char, [Int])) -> Int -> IO (Mars, [(Char, [Int])])
+takeStep (sigChan, mCore, taskChan) taskCount = do
     atomically $ writeTChan sigChan True
-    taskMap <- fillMap count taskChan Map.empty
-    core <- takeMVar mCore
-    putStrLn $ display core
-    putMVar mCore core
-    let mapEntries = Map.assocs taskMap
-    putStrLn $ show mapEntries
-    putStrLn $ "\n" ++ (show (steps - 1)) ++ " steps remaining\n"
-    let remainingTasks = filter (\(_, y) -> y /= 0) mapEntries
-    if length remainingTasks == 1 then
-        putStrLn $ [fst $ head remainingTasks] ++ " wins!"
-    else
-        examineTask ctxt count (steps - 1) delayFunc
+    taskMap <- getChanMap taskCount taskChan
+    core <- readMVar mCore
+    return (core, Map.assocs taskMap)
 
 getChanMap :: Int -> TChan (Char, [Int]) -> IO (Map.Map Char [Int])
 getChanMap = fillMap Map.empty
@@ -111,4 +131,25 @@ fillMap m x tchan = do
     (label, tasks) <- atomically $ readTChan tchan
     m' <- fillMap m (x - 1) tchan
     return $ Map.insert label tasks m'
+\end{code}
+
+The table consists of a header labelling the columns in the table, along with a listing of all the instructions currently in the core. This is done by retrieving the instructions from the core and aggregating the task messages into that listing.
+
+\begin{code}
+tableHeader :: UI Element
+tableHeader = UI.tr #+ map (toTextElement UI.th) ["Tasks", "Position", "Instruction"]
+
+tableContents :: Mars -> [(Char, [Int])] -> [UI Element]
+tableContents mars taskList = map (\[pos, tasks, ins] -> UI.tr #+ [tasks, pos, ins #. "instruction"]) elements
+    where instructions = display mars
+          insMap = Map.fromList $ map (\(pos, ins) -> (pos, ("", ins))) instructions
+          taskMap = foldl (\m (label, tasks) -> addTasks label m tasks) insMap taskList
+          rowAssocs = Map.assocs taskMap
+          elements = map (\(pos, (tasks, ins)) -> map (toTextElement UI.td) [sort tasks, show pos, ins]) rowAssocs
+
+addTasks :: Char -> Map.Map Int (String, String) -> [Int] -> Map.Map Int (String, String)
+addTasks label = foldl (\m task -> Map.insertWith (\_ (labels, ins) -> (label : labels, ins)) task ([label], show defaultIns) m)
+
+toTextElement :: UI Element -> String -> UI Element
+toTextElement eType = (\x -> eType # set text x)
 \end{code}

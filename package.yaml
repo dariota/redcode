@@ -20,6 +20,7 @@ dependencies:
 - stm
 - transformers
 - mtl
+- threepenny-gui
 
 library:
   source-dirs:
