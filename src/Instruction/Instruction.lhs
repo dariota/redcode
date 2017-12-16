@@ -1,6 +1,6 @@
 \begin{code}
 module Instruction.Instruction
-    ( Instruction(..), defaultIns, aField, bField, withA, withB,
+    ( Instruction(..), defaultIns, aField, bField, aValue, bValue, withA, withB,
       Value(..), valuePart, swapValue
     ) where
 
@@ -39,6 +39,9 @@ aField ins = case ins of
                 Cmp v _ -> v
                 Spl v   -> v
 
+aValue :: Instruction -> Int
+aValue = valuePart . aField
+
 bField :: Instruction -> Value
 bField ins = case ins of
                 Dat v   -> v 
@@ -51,6 +54,9 @@ bField ins = case ins of
                 Djn _ v -> v
                 Cmp _ v -> v
                 Spl _   -> defaultVal
+
+bValue :: Instruction -> Int
+bValue = valuePart . bField
 
 withA :: Instruction -> Int -> Instruction
 withA ins i = case ins of
