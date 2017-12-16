@@ -11,8 +11,8 @@ import Control.Monad (join)
 import Control.Monad.Trans.State (runState)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM
-import Control.Concurrent.MVar (MVar, takeMVar, putMVar, newMVar)
-import qualified Data.Map.Strict as Map (Map, assocs, empty, insert)
+import Control.Concurrent.MVar (MVar, newMVar, readMVar)
+import qualified Data.Map.Strict as Map (Map, assocs, empty, insert, insertWith, fromList)
 import System.Environment (getArgs)
 
 import Text.Read (readMaybe)
@@ -36,41 +36,17 @@ main = do
 
 -- helper functions to read inputs from CLI args
 readArgs :: [String] -> (Int, Int, IO (), [FilePath])
-readArgs args = (coreSize, steps, delayFunc, paths)
-    where coreSize = validateCoreSize $ args !! 0
-          steps = validateSteps $ args !! 1
-          delayFunc = getStepFunc $ args !! 2
-          paths = drop 3 args
+readArgs args = (coreSize, paths)
+    where coreSize = validateCoreSize $ head args
+          paths = tail args
 
 validateCoreSize :: String -> Int
 validateCoreSize = validateInt "Core size"
 
-validateSteps :: String -> Int
-validateSteps = validateInt "Step count"
-
 validateInt :: String -> String -> Int
-validateInt item s = res
-    where res'' = readMaybe s :: Maybe Int
-          res' = if isNothing res'' then error $ item ++ " must be a number" else fromJust res''
-          res = if res' > 0 then res' else error $ item ++ " must be positive"
-\end{code}
-
-We want the user to be able to specify either a number of ms between steps, or "manual" if they want to drive updates manually. We create a delay function that either prompts the user, or simply waits the number of milliseconds given.
-
-\begin{code}
-getStepFunc :: String -> IO ()
-getStepFunc s = delayFunc
-    where delay'' = readMaybe s :: Maybe Int
-          delay' = if isNothing delay'' then error "Step function must be a number or \"manual\"" else fromJust delay''
-          delay = if delay' >= 0 then delay' else error "Step delay must be non-negative"
-          manualStep = if s == "manual" then True else False
-          delayFunc = if manualStep then manualStepper else threadDelay $ delay * 10 ^ 3
-
-manualStepper :: IO ()
-manualStepper = do
-    putStrLn "Press enter to step"
-    getChar
-    return ()
+validateInt item s = if res > 0 then res else error $ item ++ " must be positive"
+    where maybeSize = readMaybe s :: Maybe Int
+          res = if isNothing maybeSize then error $ item ++ " must be a number" else fromJust maybeSize
 \end{code}
 
 Now we need to write the helper functions used to initialise the MARS. We start with the core creation, which creates a core of the specified size, and positions and labels all the programs in it (using the core's own positioning function, which spaces them evenly).
@@ -86,7 +62,7 @@ createCore size progs = return $ runState (do
 Next, we want to create all the required channels and MVar required for the worker threads at once.
 
 \begin{code}
-createContext :: Mars -> IO (TChan Bool, MVar Mars, TChan (Char, Int))
+createContext :: Mars -> IO (TChan Bool, MVar Mars, TChan (Char, [Int]))
 createContext nCore = do
     stepChan <- atomically $ newTChan
     mCore <- newMVar nCore
@@ -99,7 +75,7 @@ Now we want to conveniently consume that context and produced a curried function
 Note that we need to clone the stepper channel - this is due to the source channel being a broadcast channel (i.e. write-only) and to ensure each worker has its own read pointer within the channel.
 
 \begin{code}
-workHelper :: (TChan Bool, MVar Mars, TChan (Char, Int)) -> (Char, Executor) -> IO ()
+workHelper :: (TChan Bool, MVar Mars, TChan (Char, [Int])) -> (Char, Executor) -> IO ()
 workHelper (step, mCore, taskChan) (label, exec) = do
     myStep <- atomically $ cloneTChan step
     worker myStep mCore taskChan label exec
@@ -126,10 +102,13 @@ examineTask ctxt@(sigChan, mCore, taskChan) count steps delayFunc = do
     else
         examineTask ctxt count (steps - 1) delayFunc
 
-fillMap :: Int -> TChan (Char, Int) -> Map.Map Char Int -> IO (Map.Map Char Int)
-fillMap 0 _ m = return m
-fillMap x tchan m = do
+getChanMap :: Int -> TChan (Char, [Int]) -> IO (Map.Map Char [Int])
+getChanMap = fillMap Map.empty
+
+fillMap :: Map.Map Char [Int] -> Int -> TChan (Char, [Int]) -> IO (Map.Map Char [Int])
+fillMap m 0 _ = return m
+fillMap m x tchan = do
     (label, tasks) <- atomically $ readTChan tchan
-    m' <- fillMap (x - 1) tchan m
+    m' <- fillMap m (x - 1) tchan
     return $ Map.insert label tasks m'
 \end{code}
