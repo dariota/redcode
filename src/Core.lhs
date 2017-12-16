@@ -1,6 +1,6 @@
 \begin{code}
 module Core (
-    Mars, Core, core, lookup, insert, positionPrograms, display
+    Mars, Core, core, lookup, insert, positionPrograms, display, adjust
 ) where
 
 import Prelude hiding (lookup)
@@ -33,7 +33,7 @@ adjust i = do
     mars <- get
     let max = size mars
     let moded = i `mod` max
-    pure $ if moded <= 0 then moded + max else moded
+    pure $ if moded < 0 then moded + max else moded
 
 lookup :: Int -> Core Instruction
 lookup pos = do
@@ -45,7 +45,9 @@ insert :: Int -> Instruction -> Core ()
 insert pos ins = do
     mars <- get
     ind <- adjust pos
-    let newMap = Map.insert ind ins (memory mars)
+    aAdjust <- adjust $ valuePart $ aField ins
+    bAdjust <- adjust $ valuePart $ bField ins
+    let newMap = Map.insert ind (withB (withA ins aAdjust) bAdjust) (memory mars)
     put $ Mars (size mars) newMap
 \end{code}
 
