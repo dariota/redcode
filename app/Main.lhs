@@ -26,17 +26,22 @@ We want to invoke the MARS by passing in the core size, number of steps to take,
 main :: IO ()
 main = do
     args <- getArgs
-    let coreSize = validateCoreSize $ head args
-    let steps = validateSteps $ args !! 1
-    let delayFunc = getStepFunc $ args !! 2
-    progTexts <- sequence $ map readFile (drop 3 args)
-    (executors, nCore) <- createCore coreSize $ map readProgram progTexts
+    let (cSize, steps, delayFunc, progFiles) = readArgs args
+    progTexts <- sequence $ map readFile progFiles
+    (executors, nCore) <- createCore cSize $ map readProgram progTexts
     context <- createContext nCore
     let workers = map (forkIO . (workHelper context)) executors
     sequence_ workers
     examineTask context (length workers) steps delayFunc
 
--- helper functions to read ints from CLI args
+-- helper functions to read inputs from CLI args
+readArgs :: [String] -> (Int, Int, IO (), [FilePath])
+readArgs args = (coreSize, steps, delayFunc, paths)
+    where coreSize = validateCoreSize $ args !! 0
+          steps = validateSteps $ args !! 1
+          delayFunc = getStepFunc $ args !! 2
+          paths = drop 3 args
+
 validateCoreSize :: String -> Int
 validateCoreSize = validateInt "Core size"
 
@@ -104,7 +109,7 @@ Lastly, we need to implement examineTask - this allows the user to control the s
 
 \begin{code}
 examineTask :: (TChan Bool, MVar Mars, TChan (Char, Int)) -> Int -> Int -> IO () -> IO ()
-examineTask _ _ 0 _ = return ()
+examineTask _ _ 0 _ = putStrLn "Time's up, no winner!"
 examineTask ctxt@(sigChan, mCore, taskChan) count steps delayFunc = do
     delayFunc
     atomically $ writeTChan sigChan True
@@ -112,9 +117,14 @@ examineTask ctxt@(sigChan, mCore, taskChan) count steps delayFunc = do
     core <- takeMVar mCore
     putStrLn $ display core
     putMVar mCore core
-    putStrLn $ show $ Map.assocs taskMap
+    let mapEntries = Map.assocs taskMap
+    putStrLn $ show mapEntries
     putStrLn $ "\n" ++ (show (steps - 1)) ++ " steps remaining\n"
-    examineTask ctxt count (steps - 1) delayFunc
+    let remainingTasks = filter (\(_, y) -> y /= 0) mapEntries
+    if length remainingTasks == 1 then
+        putStrLn $ [fst $ head remainingTasks] ++ " wins!"
+    else
+        examineTask ctxt count (steps - 1) delayFunc
 
 fillMap :: Int -> TChan (Char, Int) -> Map.Map Char Int -> IO (Map.Map Char Int)
 fillMap 0 _ m = return m
