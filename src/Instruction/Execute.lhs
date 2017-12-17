@@ -22,7 +22,17 @@ type PcUpdate = Maybe Int
 execute :: Int -> Core (PcUpdate, PcUpdate)
 execute p = do
     ins <- lookup p
-    executeIns p ins
+    (task, child) <- executeIns p ins
+    adjTask <- adjustM task
+    adjChild <- adjustM child
+    pure (adjTask, adjChild)
+
+-- Should've used MaybeT, or a list...
+adjustM :: Maybe Int -> Core (Maybe Int)
+adjustM Nothing = pure Nothing
+adjustM (Just x) = do
+    adjX <- adjust x
+    pure $ Just adjX
 
 executeIns :: Int -> Instruction -> Core (PcUpdate, PcUpdate)
 executeIns pos ins = case ins of
@@ -32,15 +42,15 @@ executeIns pos ins = case ins of
     Mov _  _  -> do
         executeMov pos ins
         pure $ defU
-    -- Add whatever the A field resolves to to whatever the B field resolves to
+    -- Add the A value to whatever the B field resolves to
     Add _ _  -> do
-        (aRef, bRef) <- resolveRefs pos ins
-        executeArith bRef aRef
+        bRef <- resolve pos $ bField ins
+        executeArith bRef $ aValue ins
         pure $ defU
     -- Same as Add, but with a negative delta
     Sub _  _  -> do
-        (aRef, bRef) <- resolveRefs pos ins
-        executeArith bRef $ -aRef
+        bRef <- resolve pos $ bField ins
+        executeArith bRef $ -(aValue ins)
         pure defU
     -- Jump to whatever the A field resolves to
     Jmp _     -> do
@@ -72,9 +82,9 @@ executeIns pos ins = case ins of
     Cmp _  _  -> do
         (aRef, bRef) <- resolveRefs pos ins
         if aRef == bRef then
-            pure defU
-        else
             pure (Just (2 + pos), Nothing)
+        else
+            pure defU
     -- Creates a new task wherever the A field resolves to
     Spl _     -> do
         aRef <- resolve pos $ aField ins
