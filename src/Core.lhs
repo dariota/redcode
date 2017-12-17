@@ -62,7 +62,7 @@ positionPrograms [] = pure $ return []
 positionPrograms is = do
     mars <- get
     let spaceAlloc = size mars `div` progCount
-    let remainingSpace = size mars - (foldl1 (+) progLengths)
+        remainingSpace = size mars - (foldl1 (+) progLengths)
     progPositions <- findPositions progLengths 1 spaceAlloc
     insertPrograms $ zip progPositions is
     if remainingSpace < 0 then

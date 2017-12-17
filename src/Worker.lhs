@@ -22,7 +22,7 @@ takeStep :: Stepper -> IO Bool
 takeStep s = atomically $ readTChan s
 \end{code}
 
-Next, we want the worker to be able to signal to a listener how many tasks it has running, using some label for itself (from the spec, we'll use a Char as the label, for A, B, etc.).
+We want the worker to be able to signal to a listener where the tasks it has running are executing next, using some label for itself (from the spec, we'll use a Char as the label, for A, B, etc.).
 
 \begin{code}
 type TaskLabel = Char

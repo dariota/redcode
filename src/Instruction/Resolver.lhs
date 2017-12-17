@@ -19,7 +19,7 @@ resolve currPos (Autodecrement val) = do
     let refPos = currPos + val
     referenced <- lookup refPos
     let refVal = valuePart $ bField referenced
-    let newRef = withB referenced (refVal - 1)
+        newRef = withB referenced (refVal - 1)
     insert refPos newRef
     resolveIndirect currPos val
 

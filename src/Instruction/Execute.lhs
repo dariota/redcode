@@ -103,7 +103,7 @@ executeArith :: Int -> Int -> Core ()
 executeArith insPos delta = do
     instruction <- lookup insPos
     let val = valuePart $ bField instruction
-    let updated = withB instruction (val + delta)
+        updated = withB instruction (val + delta)
     insert insPos updated
 
 decrementAt :: Int -> Core Int
