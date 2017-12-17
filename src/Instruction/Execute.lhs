@@ -6,47 +6,40 @@ module Instruction.Execute (
 import Prelude hiding (lookup)
 
 import Instruction.Resolver
+import Control.Monad.Trans.State (get)
 import Instruction.Instruction
 import Core
 \end{code}
 
 This module will define only the semantics of instruction execution. That is, given an instruction it will determine what effect executing it would have (adjusting the program counter, creating new instructions etc).
 
-These functions execute in the context of the Core's state monad, which makes tracking its state changes as references are resolved and commands executed easy. We simply take in a position to execute a command at and perform all the required actions. We then return a tuple indicating the program counter after execution of the specified command.
+These functions execute in the context of the Core's state monad, which makes tracking its state changes as references are resolved and commands executed easy. We simply take in a position to execute a command at and perform all the required actions. We then return a list indicating the new program counters that replace the task that was just executed.
 
-However, we also need to cater for the SPL instruction, which can result in a new task being created. Hence, we return two program counter updates - the first for the current task, the second for the creation of a new task if relevant. If we wanted to generalise to the possibility of creating n tasks per instruction executed, we could simply replace the tuple with a list.
+Using a list here allows the handling of SPL to be very similar to the other instructions, and allows new instructions to spawn any number of child tasks.
 
 \begin{code}
-type PcUpdate = Maybe Int
+type PcUpdate = [Int]
 
-execute :: Int -> Core (PcUpdate, PcUpdate)
+execute :: Int -> Core PcUpdate
 execute p = do
     ins <- lookup p
-    (task, child) <- executeIns p ins
-    adjTask <- adjustM task
-    adjChild <- adjustM child
-    pure (adjTask, adjChild)
+    newPcs <- executeIns p ins
+    mars <- get
+    pure $ map (adjustWith mars) newPcs
 
--- Should've used MaybeT, or a list...
-adjustM :: Maybe Int -> Core (Maybe Int)
-adjustM Nothing = pure Nothing
-adjustM (Just x) = do
-    adjX <- adjust x
-    pure $ Just adjX
-
-executeIns :: Int -> Instruction -> Core (PcUpdate, PcUpdate)
+executeIns :: Int -> Instruction -> Core PcUpdate
 executeIns pos ins = case ins of
-    -- terminate execution - the PC becomes Nothing
-    Dat _     -> pure $ (Nothing, Nothing)
+    -- terminate execution - the PC is gone
+    Dat _     -> pure []
     -- More complicated, see below
     Mov _  _  -> do
         executeMov pos ins
-        pure $ defU
+        pure defU
     -- Add the A value to whatever the B field resolves to
     Add _ _  -> do
         bRef <- resolve pos $ bField ins
         executeArith bRef $ aValue ins
-        pure $ defU
+        pure defU
     -- Same as Add, but with a negative delta
     Sub _  _  -> do
         bRef <- resolve pos $ bField ins
@@ -55,19 +48,19 @@ executeIns pos ins = case ins of
     -- Jump to whatever the A field resolves to
     Jmp _     -> do
         aRef <- resolve pos (aField ins)
-        pure $ (Just aRef, Nothing)
+        pure [aRef]
     -- Jump to whatever the A field resolves to if the B field resolves to 0
     Jmz _  _  -> do
         (aRef, bRef) <- resolveRefs pos ins
         if bRef == 0 then
-            pure (Just aRef, Nothing)
+            pure [aRef]
         else
             pure defU
     -- Like Jmz, but jumps if the B field doesn't resolve to 0
     Jmn _  _  -> do
         (aRef, bRef) <- resolveRefs pos ins
         if bRef /= 0 then
-            pure (Just aRef, Nothing)
+            pure [aRef]
         else
             pure defU
     -- Like Jmn, but decrements what the B field resolves to first
@@ -75,22 +68,22 @@ executeIns pos ins = case ins of
         (aRef, bRef) <- resolveRefs pos ins
         decResult <- decrementAt bRef
         if decResult /= 0 then
-            pure (Just aRef, Nothing)
+            pure [aRef]
         else
             pure defU
     -- Skips an instruction if the fields resolve to the same thing
     Cmp _  _  -> do
         (aRef, bRef) <- resolveRefs pos ins
         if aRef == bRef then
-            pure (Just (2 + pos), Nothing)
+            pure [2 + pos]
         else
             pure defU
     -- Creates a new task wherever the A field resolves to
     Spl _     -> do
         aRef <- resolve pos $ aField ins
-        pure (defI, Just aRef)
-    where defI = Just (1 + pos)
-          defU = (defI, Nothing)
+        pure [aRef, defI]
+    where defI = 1 + pos
+          defU = [defI]
 \end{code}
 
 Pretty much every instruction needs both of its fields resolved, so we define a helper function to handle this, ensuring they're always resolved in the same order since field resolution can have side effects (Autodecrement values).

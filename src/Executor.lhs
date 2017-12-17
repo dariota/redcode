@@ -30,10 +30,8 @@ While we know that the childPc will never exist without the task getting assigne
 step :: Executor -> Core Executor
 step e@(Executor [])   = pure e
 step (Executor (t:ts)) = do
-    (newPc, childPc) <- execute t
-    let childTail = if isNothing childPc then [] else [fromJust childPc]
-    let taskQueue = if isNothing newPc then ts ++ childTail else ts ++ childTail ++ [fromJust newPc]
-    pure $ Executor taskQueue
+    newPcs <- execute t
+    pure $ Executor $ ts ++ newPcs
 \end{code}
 
 In order to actually execute this, we now need to put it in a thread that repeatedly calls step while the simulation is running, managing the sharing of the core and cleanup of the executor when it terminates.

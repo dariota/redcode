@@ -1,6 +1,6 @@
 \begin{code}
 module Core (
-    Mars, Core, core, lookup, insert, positionPrograms, display, adjust
+    Mars, Core, core, lookup, insert, positionPrograms, display, adjust, adjustWith
 ) where
 
 import Prelude hiding (lookup)
@@ -31,9 +31,12 @@ core size = Mars size Map.empty
 adjust :: Int -> Core Int
 adjust i = do
     mars <- get
-    let max = size mars
-    let moded = i `mod` max
-    pure $ if moded < 0 then moded + max else moded
+    pure $ adjustWith mars i
+
+adjustWith :: Mars -> Int -> Int
+adjustWith mars i = if moded < 0 then moded + max else moded
+    where max = size mars
+          moded = i `mod` max
 
 lookup :: Int -> Core Instruction
 lookup pos = do
