@@ -22,9 +22,7 @@ size :: Executor -> Int
 size (Executor xs) = length xs
 \end{code}
 
-We want to pass the core to the executor and have it execute a single step (with its next task), then return the new executor with updated child tasks.
-
-While we know that the childPc will never exist without the task getting assigned a new PC, we'll assume minimal knowledge and support one without the other.
+We want to pass the core to the executor and have it execute a single step (with its next task), updating the core and returning an updated executor with all the task PCs resulting from the execution.
 
 \begin{code}
 step :: Executor -> Core Executor
@@ -34,4 +32,4 @@ step (Executor (t:ts)) = do
     pure $ Executor $ ts ++ newPcs
 \end{code}
 
-In order to actually execute this, we now need to put it in a thread that repeatedly calls step while the simulation is running, managing the sharing of the core and cleanup of the executor when it terminates.
+In order to actually execute this, we now need to put it in a thread that repeatedly calls step while the simulation is running, which will manage the sharing of the core.

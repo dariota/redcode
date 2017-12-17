@@ -24,7 +24,7 @@ import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 \end{code}
 
-We want to invoke the MARS by passing in the core size, number of steps to take, delay between steps (delay in ms, or manual to manually step the simulation), and a list of filenames containing the programs to position in the core before execution.
+We want to invoke the MARS by passing in the core size, and a list of filenames containing the programs to position in the core before execution. These will each run in their own thread and be externally synchronised, while the results of their execution are displayed in the GUI.
 
 \begin{code}
 main :: IO ()
@@ -40,7 +40,7 @@ main = do
 
 -- helper functions to read inputs from CLI args
 readArgs :: [String] -> (Int, [FilePath])
-readArgs args = (coreSize, paths)
+readArgs args  = (coreSize, paths)
     where coreSize = validateCoreSize $ head args
           paths = tail args
 
@@ -87,11 +87,11 @@ workHelper (step, mCore, taskChan) (label, exec) = do
 
 We now need to implement runGUI - this presents a threepenny-gui for the user to step through the program, viewing where the tasks currently are and what the instructions in the core are.
 
-The GUI will consist of a single button which takes one step through the simulation, and a table showing all the instructions in the core, along with a list of what instruction tasks in the various programs are currently being executed.
+The GUI will consist of a single button which takes one step through the simulation, and a table showing all the instructions in the core, along with a list of what instruction tasks in the various programs are currently executing.
 
 \begin{code}
 runGUI :: (TChan Bool, MVar Mars, TChan (Char, [Int])) -> Int -> IO ()
-runGUI ctxt@(sigChan, mCore, taskChan) count = startGUI defaultConfig (\w -> do
+runGUI ctxt@(sigChan, mCore, taskChan) count = startGUI defaultConfig $ \w -> do
     return w # set title "MARS"
 
     initialCore <- liftIO $ readMVar mCore
@@ -109,7 +109,7 @@ runGUI ctxt@(sigChan, mCore, taskChan) count = startGUI defaultConfig (\w -> do
         element coreTab #+ (tableHeader : (tableContents mars taskList))
         return ()
 
-    return ())
+    return ()
 \end{code}
 
 The step function sends a signal on the synchronisation channel for all workers to execute a single step. It then collects the list of program counters returned on the task channel and aggregates them with their labels into a list to be consumed by the table producing functions.
@@ -135,12 +135,14 @@ fillMap m x tchan = do
 
 The table consists of a header labelling the columns in the table, along with a listing of all the instructions currently in the core. This is done by retrieving the instructions from the core and aggregating the task messages into that listing.
 
+I couldn't get threepenny to use the CSS file I gave it despite trying a few different ways, so instead the instructions are given inline styles.
+
 \begin{code}
 tableHeader :: UI Element
 tableHeader = UI.tr #+ map (toTextElement UI.th) ["Tasks", "Position", "Instruction"]
 
 tableContents :: Mars -> [(Char, [Int])] -> [UI Element]
-tableContents mars taskList = map (\[pos, tasks, ins] -> UI.tr #+ [tasks, pos, ins #. "instruction"]) elements
+tableContents mars taskList = map (\[pos, tasks, ins] -> UI.tr #+ [tasks, pos, ins # set UI.style [("font-family", "monospace")]]) elements
     where instructions = display mars
           insMap = Map.fromList $ map (\(pos, ins) -> (pos, ("", ins))) instructions
           taskMap = foldl (\m (label, tasks) -> addTasks label m tasks) insMap taskList

@@ -34,10 +34,10 @@ signalTask tchan label positions = atomically $ writeTChan tchan (label, positio
 
 A worker must be able to determine when to take a step (using the Stepper), access the shared core, simulate a step of its executors, and signal to a listener how many tasks remain after each step (using the TaskChan above).
 
-The core will be shared using an MVar, as only one executor can act on the core at a time anyway. Workers will retrieve the core, execute a single step using their executor if the simulation is still running, report the task count, and repeat.
+The core will be shared using an MVar, as only one executor can act on the core at a time anyway. Workers will retrieve the core, execute a single step using their executor if the simulation is still running, report the task positions, and repeat.
 
 \begin{code}
-worker :: Stepper -> MVar (Mars) -> TaskChan -> TaskLabel -> Executor -> IO ()
+worker :: Stepper -> MVar Mars -> TaskChan -> TaskLabel -> Executor -> IO ()
 worker stepper mcore tchan label exec = do
     continue <- takeStep stepper
     if continue then

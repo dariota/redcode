@@ -11,23 +11,23 @@ import Data.Maybe (fromJust, isNothing)
 import qualified Data.Map.Strict as Map
 \end{code}
 
-The core will be implemented as a thin wrapper around Haskell's Map. This is for simplicity in evaluating and updating values, rather than maintaining a large list which will likely contain a large number of DAT 0 (or, empty) values.
+The core will be implemented as a thin wrapper around Haskell's Map, transformed with a state monad. This is for simplicity in evaluating and updating values, rather than maintaining a large list which will likely contain a large number of DAT 0 (or, empty) values.
 
-The core has a range of allowed values, from 1 to n, where n is whatever size is decided on externally (commonly 8000). All arithmetic and addressing occurs within that valid range, and automatically kept within that range. As such, we need to know what the valid range is.
+The core has a range of allowed values, from 1 to n, where n is whatever size is decided on externally (commonly 8000). All arithmetic and addressing occurs within that valid range, and kept within that range. As such, we need to know what the valid range is.
 
 \begin{code}
 data Mars = Mars {size :: Int, memory :: (Map.Map Int Instruction)}
     deriving (Show)
 
 type Core a = StateT Mars Identity a
-\end{code}
 
-We now create a wrapper function that creates our map, initially empty, as well as wrapper functions on its insert and lookup that ensure the key is valid before use and return a DAT 0 if the requested location is empty.
-
-\begin{code}
 core :: Int -> Mars
 core size = Mars size Map.empty
+\end{code}
 
+We now create a wrapper function that creates our map, initially empty, as well as wrapper functions on its insert and lookup that ensure the key and instruction fields are valid before use and return a DAT 0 if the requested location is empty.
+
+\begin{code}
 adjust :: Int -> Core Int
 adjust i = do
     mars <- get
@@ -54,7 +54,7 @@ insert pos ins = do
     put $ Mars (size mars) newMap
 \end{code}
 
-We'll want to initialise the core with a number of programs. For simplicity, we'll try to space these somewhat eventually, allowing each one an equal space allocation which it'll be placed in the middle of.
+We'll want to initialise the core with a number of programs. For simplicity, we'll try to space these somewhat evenly, allowing each one an equal space allocation which it'll be placed in the middle of.
 
 \begin{code}
 positionPrograms :: Monad m => [[Instruction]] -> Core (m [Int])

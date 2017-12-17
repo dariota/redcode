@@ -9,7 +9,7 @@ import Data.Char (isDigit, toLower, isSpace)
 
 Instructions are composed of an opcode and up to two fields, A and B, each containing a value. These values have their own semantics. In instructions where only one field is used, the other field is zero.
 
-We define convenience functions, aField and bField, which return instructions' fields or the default value, and also functions to swap out the values in the a or b field.
+We define a few convenience functions to access the value fields, since the variable number of fields doesn't lend itself to the record syntax.
 
 \begin{code}
 data Instruction = Dat Value
@@ -99,7 +99,7 @@ defaultVal :: Value
 defaultVal = Direct 0
 \end{code}
 
-We'll want to be able to update instructions by swapping out their value part.
+We also define functions to swap out the value part, useful for updating instructions as a result of a ADD, SUB, DJN, or resulotion of an Autodecrement address.
 
 \begin{code}
 valuePart :: Value -> Int
