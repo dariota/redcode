@@ -1,10 +1,11 @@
 name:                redcode
 version:             0.1.0.0
 github:              dariota/redcode
-license:             GPLv3
+license:             GPL-3
 author:              Dário Tavares Antunes
 maintainer:          tavaresd@tcd.ie
 copyright:           2017 Dário Tavares Antunes
+category:            Simulation
 
 extra-source-files:
 - README.md
